@@ -1,8 +1,14 @@
+"""Single-file Gradio frontend / Hugging Face inference app.
+
+Set APP_MODE=space on Hugging Face Spaces to load PhoBERT and serve /predict.
+The default Vercel mode only calls the public Space API and stays lightweight.
+"""
+
 import os
 
 import gradio as gr
 from dotenv import load_dotenv
-import httpx
+from gradio_client import Client
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -12,12 +18,9 @@ MODEL_ID = os.getenv("HF_MODEL_ID", "Dinox16/phobert-sentiment").strip()
 HF_TOKEN = os.getenv("HF_TOKEN") or None
 MAX_LENGTH = int(os.getenv("MAX_LENGTH", "128"))
 SPACE_ID = os.getenv("SPACE_ID", "Dinox16/pho-bert-DTU").strip()
-# URL trực tiếp của Space (REST /predict do FastAPI phục vụ, không phải endpoint Gradio)
-SPACE_URL = os.getenv(
-    "SPACE_URL", "https://" + SPACE_ID.replace("/", "-").replace("_", "-").lower() + ".hf.space"
-).rstrip("/")
+SPACE_API_NAME = os.getenv("SPACE_API_NAME", "/predict").strip()
 SPACE_TOKEN = os.getenv("SPACE_TOKEN", "").strip() or None
-APP_MODE = os.getenv("APP_MODE", "space" if os.getenv("SYSTEM") == "spaces" else "vercel").strip().lower()
+APP_MODE = os.getenv("APP_MODE", "vercel").strip().lower()
 
 tokenizer = None
 model = None
@@ -54,10 +57,14 @@ if APP_MODE == "space":
     def health_check():
         return {"status": "ok", "model": MODEL_ID}
 
+    @api.post("/predict")
     @torch.inference_mode()
-    def run_model(text: str) -> dict:
+    def predict(request: PredictionRequest):
         if tokenizer is None or model is None:
             raise HTTPException(status_code=503, detail="Model is not ready yet.")
+        text = request.text.strip()
+        if not text:
+            raise HTTPException(status_code=422, detail="Text must not be blank.")
         inputs = tokenizer(
             preprocess_text(text), return_tensors="pt", truncation=True, max_length=MAX_LENGTH
         ).to(DEVICE)
@@ -69,52 +76,37 @@ if APP_MODE == "space":
         }
         return {"text": text, "prediction": max(scores, key=scores.get), "scores": scores}
 
-    @api.post("/predict")
-    def predict(request: PredictionRequest):
-        text = request.text.strip()
-        if not text:
-            raise HTTPException(status_code=422, detail="Text must not be blank.")
-        return run_model(text)
-
-    def get_scores(text: str) -> dict:
-        # Space tự chạy model, KHÔNG gọi lại chính nó qua Client
-        return run_model(text)["scores"]
-
 else:
     @api.get("/health")
     def health_check():
         return {"status": "ok", "mode": "vercel-proxy", "space_id": SPACE_ID}
 
-    def call_space(text: str) -> dict:
-        headers = {"Authorization": f"Bearer {SPACE_TOKEN}"} if SPACE_TOKEN else {}
-        # Space miễn phí có thể đang ngủ: lần gọi đầu cần thời gian khởi động
-        response = httpx.post(f"{SPACE_URL}/predict", json={"text": text}, headers=headers, timeout=120)
-        response.raise_for_status()
-        return response.json()
-
     @api.post("/predict")
     def predict(request: PredictionRequest):
-        text = request.text.strip()
-        if not text:
+        if not request.text.strip():
             raise HTTPException(status_code=422, detail="Text must not be blank.")
         try:
-            return call_space(text)
+            result = Client(SPACE_ID, token=SPACE_TOKEN, verbose=False).predict(
+                request.text.strip(), api_name=SPACE_API_NAME
+            )
+            if isinstance(result, dict):
+                return result
+            return {"scores": result}
         except Exception as exc:
-            print(f"Hugging Face Space error: {type(exc).__name__}: {exc}")
             raise HTTPException(status_code=502, detail="Hugging Face Space prediction failed.") from exc
-
-    def get_scores(text: str) -> dict:
-        return call_space(text).get("scores")
 
 
 def classify(text: str) -> dict:
     if not text or not text.strip():
         return {}
     try:
-        returned_scores = get_scores(text.strip())
+        result = Client(SPACE_ID, token=SPACE_TOKEN, verbose=False).predict(
+            text.strip(), api_name=SPACE_API_NAME
+        )
     except Exception as exc:
-        print(f"Prediction error: {type(exc).__name__}: {exc}")
+        print(f"Hugging Face Space error: {type(exc).__name__}: {exc}")
         raise gr.Error("Could not get predictions from the Hugging Face Space.") from exc
+    returned_scores = result.get("scores") if isinstance(result, dict) else None
     if not isinstance(returned_scores, dict):
         raise gr.Error("The Hugging Face Space returned an unexpected response.")
     return returned_scores
@@ -172,8 +164,8 @@ with gr.Blocks(title="Student Feedback Sentiment") as demo:
                 """
             )
 
-    submit.click(fn=classify, inputs=comment, outputs=scores, api_name="classify")
-    comment.submit(fn=classify, inputs=comment, outputs=scores, api_name=False)
+    submit.click(fn=classify, inputs=comment, outputs=scores)
+    comment.submit(fn=classify, inputs=comment, outputs=scores)
 
 
 app = gr.mount_gradio_app(api, demo, path="/", theme=theme)
