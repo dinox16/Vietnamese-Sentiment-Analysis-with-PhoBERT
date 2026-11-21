@@ -53,19 +53,21 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-`requirements.txt` intentionally does not set a PyTorch package index. This lets Vercel's `uv` resolver find `requests` and other packages from PyPI while resolving the CPU-compatible PyTorch release normally.
+Vercel installs only lightweight web dependencies from `requirements.txt`; model dependencies are in `requirements-space.txt` and are installed in Hugging Face Spaces. This keeps the Vercel function bundle below its size limit.
 
-Copy `.env.example` to `.env`. Set `HF_MODEL_ID` to the model repository. If it is private or gated, set `HF_TOKEN` as well. Keep `.env` private; it is excluded from Git. Then run:
+Copy `.env.example` to `.env`. Set `SPACE_API_URL` to your Hugging Face Space's `/predict` URL. Keep `.env` private; it is excluded from Git. Then run:
 
 ```bash
 python app.py
 ```
 
-Open `http://127.0.0.1:7860` for the Gradio interface. The same app exposes `GET /health` and `POST /predict`. Send a JSON body such as `{"text":"Thầy giảng bài rất dễ hiểu."}` to `/predict`; the response includes `text`, `prediction`, and `scores`.
+Open `http://127.0.0.1:7860` for the Gradio interface. In its default mode, the app proxies `/health` and `/predict` requests to the Hugging Face Space.
 
 ## Deploy to Hugging Face Spaces
 
-Deploy this repository as a Gradio Space using `app.py` as the entry point. Set `HF_MODEL_ID` in Space variables, and add `HF_TOKEN` as a Space secret only if the model is private or gated. The Space serves the demo and inference API together. Configure the Vercel server to call `https://<your-space-subdomain>.hf.space/predict`. Keep any private Space access token in Vercel server environment variables, never in browser code.
+Deploy this repository as a Gradio Space using `app.py` as the entry point. Set `APP_MODE=space` and `HF_MODEL_ID` in Space variables; add `HF_TOKEN` only if the model is private or gated. Configure the Space to install `requirements-space.txt`. The same app serves the Gradio demo and `POST /predict`.
+
+On Vercel, leave `APP_MODE` unset or set it to `vercel`, and set `SPACE_API_URL` to `https://<your-space-subdomain>.hf.space/predict`. If the Space API is private, set `SPACE_API_TOKEN` in Vercel environment variables; never expose it in browser code.
 
 ## Train again
 

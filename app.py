@@ -1,23 +1,27 @@
-"""PhoBERT sentiment demo and JSON API in one Hugging Face Space app."""
+"""Single-file Gradio frontend / Hugging Face inference app.
+
+Set APP_MODE=space on Hugging Face Spaces to load PhoBERT and serve /predict.
+The default Vercel mode only calls the public Space API and stays lightweight.
+"""
 
 import os
-from contextlib import asynccontextmanager
 
 import gradio as gr
-import torch
 from dotenv import load_dotenv
+import requests
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
-from vsfc.preprocessing import preprocess_text
 
 load_dotenv()
 
 MODEL_ID = os.getenv("HF_MODEL_ID", "Dinox16/phobert-sentiment").strip()
 HF_TOKEN = os.getenv("HF_TOKEN") or None
 MAX_LENGTH = int(os.getenv("MAX_LENGTH", "128"))
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+SPACE_API_URL = os.getenv(
+    "SPACE_API_URL", "https://dinox16-pho-bert-dtu.hf.space/predict"
+).strip()
+SPACE_API_TOKEN = os.getenv("SPACE_API_TOKEN", "").strip()
+APP_MODE = os.getenv("APP_MODE", "vercel").strip().lower()
 
 tokenizer = None
 model = None
@@ -27,69 +31,106 @@ class PredictionRequest(BaseModel):
     text: str = Field(min_length=1, max_length=10000)
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    global tokenizer, model
-    tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_ID, use_fast=False, token=HF_TOKEN
-    )
-    model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL_ID, token=HF_TOKEN
-    )
-    model.to(DEVICE).eval()
-    yield
-    model = None
-    tokenizer = None
+api = FastAPI(title="Vietnamese Student Feedback Sentiment API")
 
 
-api = FastAPI(
-    title="Vietnamese Student Feedback Sentiment API",
-    description="Classify Vietnamese student feedback as negative, neutral, or positive.",
-    version="1.0.0",
-    lifespan=lifespan,
-)
+if APP_MODE == "space":
+    import torch
+    from contextlib import asynccontextmanager
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    from vsfc.preprocessing import preprocess_text
 
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-@api.get("/health")
-def health_check():
-    return {"status": "ok", "model": MODEL_ID}
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        global tokenizer, model
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, use_fast=False, token=HF_TOKEN)
+        model = AutoModelForSequenceClassification.from_pretrained(MODEL_ID, token=HF_TOKEN)
+        model.to(DEVICE).eval()
+        yield
+        model = None
+        tokenizer = None
 
+    api.router.lifespan_context = lifespan
 
-@api.post("/predict")
-@torch.inference_mode()
-def predict(request: PredictionRequest):
-    if tokenizer is None or model is None:
-        raise HTTPException(status_code=503, detail="Model is not ready yet.")
-    text = request.text.strip()
-    if not text:
-        raise HTTPException(status_code=422, detail="Text must not be blank.")
+    @api.get("/health")
+    def health_check():
+        return {"status": "ok", "model": MODEL_ID}
 
-    inputs = tokenizer(
-        preprocess_text(text),
-        return_tensors="pt",
-        truncation=True,
-        max_length=MAX_LENGTH,
-    ).to(DEVICE)
-    probabilities = torch.softmax(model(**inputs).logits, dim=-1)[0].cpu().tolist()
-    id2label = model.config.id2label
-    scores = {
-        str(id2label.get(index, id2label.get(str(index), f"LABEL_{index}"))): round(
-            float(score), 6
-        )
-        for index, score in enumerate(probabilities)
-    }
-    return {
-        "text": text,
-        "prediction": max(scores, key=scores.get),
-        "scores": scores,
-    }
+    @api.post("/predict")
+    @torch.inference_mode()
+    def predict(request: PredictionRequest):
+        if tokenizer is None or model is None:
+            raise HTTPException(status_code=503, detail="Model is not ready yet.")
+        text = request.text.strip()
+        if not text:
+            raise HTTPException(status_code=422, detail="Text must not be blank.")
+        inputs = tokenizer(
+            preprocess_text(text), return_tensors="pt", truncation=True, max_length=MAX_LENGTH
+        ).to(DEVICE)
+        probabilities = torch.softmax(model(**inputs).logits, dim=-1)[0].cpu().tolist()
+        id2label = model.config.id2label
+        scores = {
+            str(id2label.get(index, id2label.get(str(index), f"LABEL_{index}"))): round(float(score), 6)
+            for index, score in enumerate(probabilities)
+        }
+        return {"text": text, "prediction": max(scores, key=scores.get), "scores": scores}
+
+else:
+    @api.get("/health")
+    def health_check():
+        return {"status": "ok", "mode": "vercel-proxy", "space_api": SPACE_API_URL}
+
+    @api.post("/predict")
+    def predict(request: PredictionRequest):
+        if not request.text.strip():
+            raise HTTPException(status_code=422, detail="Text must not be blank.")
+        headers = {"Content-Type": "application/json"}
+        if SPACE_API_TOKEN:
+            headers["Authorization"] = f"Bearer {SPACE_API_TOKEN}"
+        try:
+            response = requests.post(
+                SPACE_API_URL,
+                json={"text": request.text.strip()},
+                headers=headers,
+                timeout=45,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.Timeout as exc:
+            raise HTTPException(status_code=504, detail="Hugging Face Space timed out.") from exc
+        except requests.HTTPError as exc:
+            raise HTTPException(
+                status_code=exc.response.status_code,
+                detail="Hugging Face Space returned an error.",
+            ) from exc
+        except (requests.RequestException, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="Could not get a valid response from the Space.") from exc
 
 
 def classify(text: str) -> dict:
     if not text or not text.strip():
         return {}
-    result = predict(PredictionRequest(text=text))
-    return result["scores"]
+    try:
+        response = requests.post(
+            SPACE_API_URL,
+            json={"text": text.strip()},
+            headers={"Authorization": f"Bearer {SPACE_API_TOKEN}"} if SPACE_API_TOKEN else {},
+            timeout=45,
+        )
+        response.raise_for_status()
+        result = response.json()
+    except requests.Timeout as exc:
+        raise gr.Error("The Hugging Face Space took too long to respond.") from exc
+    except requests.HTTPError as exc:
+        raise gr.Error(f"The Hugging Face Space returned error {exc.response.status_code}.") from exc
+    except (requests.RequestException, ValueError) as exc:
+        raise gr.Error("Could not get a valid response from the Hugging Face Space.") from exc
+    returned_scores = result.get("scores") if isinstance(result, dict) else None
+    if not isinstance(returned_scores, dict):
+        raise gr.Error("The Hugging Face Space returned an unexpected response.")
+    return returned_scores
 
 
 theme = gr.themes.Soft(
