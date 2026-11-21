@@ -1,26 +1,59 @@
-# Python
+# Python and local environments
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+env/
 .pytest_cache/
 
-# Jupyter
+# Jupyter local state and generated exports
 .ipynb_checkpoints/
+__results___files/
 
-# Model & dữ liệu (quá lớn cho GitHub -> lưu trên Hugging Face Hub)
+# Model checkpoints and generated training artifacts
 outputs/
 best_model/
+result/**/best_model/
 *.safetensors
 *.bin
 *.pt
+*.pth
+*.joblib
+*.pkl
 *.zip
+
+# Local data, logs, and temporary files
+data/
+datasets/
+*.csv
+*.log
+tempCodeRunnerFile.*
+
+# Credentials and private environment configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.*
+credentials.*
+*_credentials.json
+token*
+*token*.txt
+
+# User-specific tool and deployment configuration
+.huggingface/
+.cache/
+__huggingface_repos__.json
 
 # Gradio
 .gradio/
 flagged/
 
-# OS / IDE
+# OS and IDE
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/
