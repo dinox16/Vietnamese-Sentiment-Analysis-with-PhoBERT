@@ -53,6 +53,8 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+`requirements.txt` intentionally does not set a PyTorch package index. This lets Vercel's `uv` resolver find `requests` and other packages from PyPI while resolving the CPU-compatible PyTorch release normally.
+
 Copy `.env.example` to `.env`. Set `HF_MODEL_ID` to the model repository. If it is private or gated, set `HF_TOKEN` as well. Keep `.env` private; it is excluded from Git. Then run:
 
 ```bash
