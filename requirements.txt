@@ -1,5 +1,5 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 gradio>=5.0,<7.0
-requests>=2.31
+gradio-client>=2.7,<3.0
 python-dotenv>=1.0

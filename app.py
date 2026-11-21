@@ -8,7 +8,7 @@ import os
 
 import gradio as gr
 from dotenv import load_dotenv
-import requests
+from gradio_client import Client
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -17,10 +17,9 @@ load_dotenv()
 MODEL_ID = os.getenv("HF_MODEL_ID", "Dinox16/phobert-sentiment").strip()
 HF_TOKEN = os.getenv("HF_TOKEN") or None
 MAX_LENGTH = int(os.getenv("MAX_LENGTH", "128"))
-SPACE_API_URL = os.getenv(
-    "SPACE_API_URL", "https://dinox16-pho-bert-dtu.hf.space/predict"
-).strip()
-SPACE_API_TOKEN = os.getenv("SPACE_API_TOKEN", "").strip()
+SPACE_ID = os.getenv("SPACE_ID", "Dinox16/pho-bert-DTU").strip()
+SPACE_API_NAME = os.getenv("SPACE_API_NAME", "/predict").strip()
+SPACE_TOKEN = os.getenv("SPACE_TOKEN", "").strip() or None
 APP_MODE = os.getenv("APP_MODE", "vercel").strip().lower()
 
 tokenizer = None
@@ -80,53 +79,33 @@ if APP_MODE == "space":
 else:
     @api.get("/health")
     def health_check():
-        return {"status": "ok", "mode": "vercel-proxy", "space_api": SPACE_API_URL}
+        return {"status": "ok", "mode": "vercel-proxy", "space_id": SPACE_ID}
 
     @api.post("/predict")
     def predict(request: PredictionRequest):
         if not request.text.strip():
             raise HTTPException(status_code=422, detail="Text must not be blank.")
-        headers = {"Content-Type": "application/json"}
-        if SPACE_API_TOKEN:
-            headers["Authorization"] = f"Bearer {SPACE_API_TOKEN}"
         try:
-            response = requests.post(
-                SPACE_API_URL,
-                json={"text": request.text.strip()},
-                headers=headers,
-                timeout=45,
+            result = Client(SPACE_ID, hf_token=SPACE_TOKEN).predict(
+                request.text.strip(), api_name=SPACE_API_NAME
             )
-            response.raise_for_status()
-            return response.json()
-        except requests.Timeout as exc:
-            raise HTTPException(status_code=504, detail="Hugging Face Space timed out.") from exc
-        except requests.HTTPError as exc:
-            raise HTTPException(
-                status_code=exc.response.status_code,
-                detail="Hugging Face Space returned an error.",
-            ) from exc
-        except (requests.RequestException, ValueError) as exc:
-            raise HTTPException(status_code=502, detail="Could not get a valid response from the Space.") from exc
+            if isinstance(result, dict):
+                return result
+            return {"scores": result}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail="Hugging Face Space prediction failed.") from exc
 
 
 def classify(text: str) -> dict:
     if not text or not text.strip():
         return {}
     try:
-        response = requests.post(
-            SPACE_API_URL,
-            json={"text": text.strip()},
-            headers={"Authorization": f"Bearer {SPACE_API_TOKEN}"} if SPACE_API_TOKEN else {},
-            timeout=45,
+        result = Client(SPACE_ID, hf_token=SPACE_TOKEN).predict(
+            text.strip(), api_name=SPACE_API_NAME
         )
-        response.raise_for_status()
-        result = response.json()
-    except requests.Timeout as exc:
-        raise gr.Error("The Hugging Face Space took too long to respond.") from exc
-    except requests.HTTPError as exc:
-        raise gr.Error(f"The Hugging Face Space returned error {exc.response.status_code}.") from exc
-    except (requests.RequestException, ValueError) as exc:
-        raise gr.Error("Could not get a valid response from the Hugging Face Space.") from exc
+    except Exception as exc:
+        print(f"Hugging Face Space error: {type(exc).__name__}: {exc}")
+        raise gr.Error("Could not get predictions from the Hugging Face Space.") from exc
     returned_scores = result.get("scores") if isinstance(result, dict) else None
     if not isinstance(returned_scores, dict):
         raise gr.Error("The Hugging Face Space returned an unexpected response.")

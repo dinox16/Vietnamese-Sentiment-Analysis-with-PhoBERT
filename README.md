@@ -55,7 +55,7 @@ pip install -r requirements.txt
 
 Vercel installs only lightweight web dependencies from `requirements.txt`; model dependencies are in `requirements-space.txt` and are installed in Hugging Face Spaces. This keeps the Vercel function bundle below its size limit.
 
-Copy `.env.example` to `.env`. Set `SPACE_API_URL` to your Hugging Face Space's `/predict` URL. Keep `.env` private; it is excluded from Git. Then run:
+Copy `.env.example` to `.env`. Set `SPACE_ID=Dinox16/pho-bert-DTU` and `SPACE_API_NAME=/predict`. Keep `.env` private; it is excluded from Git. Then run:
 
 ```bash
 python app.py
@@ -65,9 +65,9 @@ Open `http://127.0.0.1:7860` for the Gradio interface. In its default mode, the 
 
 ## Deploy to Hugging Face Spaces
 
-Deploy this repository as a Gradio Space using `app.py` as the entry point. Set `APP_MODE=space` and `HF_MODEL_ID` in Space variables; add `HF_TOKEN` only if the model is private or gated. Configure the Space to install `requirements-space.txt`. The same app serves the Gradio demo and `POST /predict`.
+Deploy this repository as a Gradio Space using `app.py` as the entry point. Set `APP_MODE=space` and `HF_MODEL_ID` in Space variables; add `HF_TOKEN` only if the model is private or gated. The Space must install the ML dependencies from `requirements-space.txt` (copy those dependencies into the Space repository's root `requirements.txt` if the Space builder does not read the alternate file). The same app serves the Gradio demo and publishes the prediction endpoint.
 
-On Vercel, leave `APP_MODE` unset or set it to `vercel`, and set `SPACE_API_URL` to `https://<your-space-subdomain>.hf.space/predict`. If the Space API is private, set `SPACE_API_TOKEN` in Vercel environment variables; never expose it in browser code.
+On Vercel, set `APP_MODE=vercel`, `SPACE_ID=Dinox16/pho-bert-DTU`, and `SPACE_API_NAME=/predict`. If the Space is private, set `SPACE_TOKEN` as a Vercel environment variable; never expose it in browser code. The Gradio endpoint name must match the Space's published API. The old `SENTIMENT_API_URL` setting is no longer used.
 
 ## Train again
 
