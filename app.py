@@ -1,25 +1,75 @@
-"""Gradio demo for Vietnamese student feedback sentiment classification."""
+"""Gradio demo that calls a sentiment model hosted on Hugging Face."""
 
 import os
-
+from fastapi import FastAPI
 import gradio as gr
+import requests
+from dotenv import load_dotenv
 
-from vsfc.predictor import SentimentPredictor
+load_dotenv()
 
-# Set MODEL_ID to your Hugging Face model repository or local model directory.
-# The bundled checkpoint can be selected with:
-# MODEL_ID=result/DTU-CS/HGK/best_model python app.py
-MODEL_ID = os.getenv("MODEL_ID", "Dinox16/phobert-sentiment")
-LABEL_EN = {"Negative": "Negative", "Neutral": "Neutral", "Positive": "Positive"}
+HF_MODEL_ID = os.getenv("HF_MODEL_ID", "Dinox16/phobert-sentiment").strip()
+HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
+HF_API_URL = f"https://router.huggingface.co/hf-inference/models/{HF_MODEL_ID}"
 
-predictor = SentimentPredictor(MODEL_ID)
+LABEL_EN = {
+    "negative": "Negative",
+    "neutral": "Neutral",
+    "positive": "Positive",
+}
 
 
 def classify(text: str) -> dict:
     if not text or not text.strip():
         return {}
-    result = predictor.predict(text)[0]
-    return {LABEL_EN.get(label, label): score for label, score in result["probabilities"].items()}
+    if not HF_TOKEN:
+        raise gr.Error("HF_TOKEN is missing. Add your Hugging Face token to the .env file.")
+
+    try:
+        response = requests.post(
+            HF_API_URL,
+            headers={"Authorization": f"Bearer {HF_TOKEN}"},
+            json={"inputs": text.strip()},
+            timeout=60,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.Timeout as exc:
+        raise gr.Error("The Hugging Face API took too long to respond. Please try again.") from exc
+    except requests.HTTPError as exc:
+        detail = ""
+        try:
+            detail = response.json().get("error", "")
+        except (ValueError, AttributeError):
+            pass
+        if response.status_code in (401, 403):
+            message = "Hugging Face rejected the token. Check HF_TOKEN and its permissions."
+        elif response.status_code == 503:
+            message = "The model is loading on Hugging Face. Please try again shortly."
+        else:
+            message = f"Hugging Face API request failed ({response.status_code})."
+        if detail:
+            message += f" {detail}"
+        raise gr.Error(message) from exc
+    except requests.RequestException as exc:
+        raise gr.Error("Could not connect to the Hugging Face API. Check your connection and model ID.") from exc
+
+    # Text classification endpoints normally return [[{label, score}, ...]].
+    # Accept a flat list as well for compatible inference response formats.
+    predictions = payload[0] if payload and isinstance(payload[0], list) else payload
+    if not isinstance(predictions, list):
+        raise gr.Error("The model returned an unexpected response. Check that it supports text classification.")
+
+    scores = {}
+    for item in predictions:
+        if not isinstance(item, dict) or "label" not in item or "score" not in item:
+            continue
+        label = str(item["label"])
+        display_label = LABEL_EN.get(label.lower(), label)
+        scores[display_label] = float(item["score"])
+    if not scores:
+        raise gr.Error("The model response did not contain sentiment labels and scores.")
+    return scores
 
 
 theme = gr.themes.Soft(
@@ -76,6 +126,12 @@ with gr.Blocks(theme=theme, title="Student Feedback Sentiment") as demo:
 
     submit.click(fn=classify, inputs=comment, outputs=scores)
     comment.submit(fn=classify, inputs=comment, outputs=scores)
+app = FastAPI()
+app = gr.mount_gradio_app(
+        app,
+        demo,
+        path="/"
+    )
 
 
 if __name__ == "__main__":

@@ -55,18 +55,19 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Set `MODEL_ID` to either your Hugging Face model repository or a local directory containing the saved model files, then launch the app:
+The app calls the model through the Hugging Face Inference API. Copy `.env.example` to `.env`, then add your Hugging Face access token and model ID:
 
 ```bash
-# Replace this value with your model repository or local model path.
-# macOS/Linux:
-MODEL_ID="YOUR_HF_USERNAME/phobert-uit-vsfc" python app.py
-# Windows PowerShell:
-$env:MODEL_ID = "YOUR_HF_USERNAME/phobert-uit-vsfc"
+cp .env.example .env
+```
+
+Edit `.env` and replace `HF_TOKEN` with your Hugging Face token. Set `HF_MODEL_ID` to the repository containing your fine-tuned text-classification model. Keep `.env` private; it is excluded from Git. Install the dependencies with `pip install -r requirements.txt`, then start the app:
+
+```bash
 python app.py
 ```
 
-Open `http://127.0.0.1:7860` in your browser. To use the included checkpoint directly, set `MODEL_ID` to `result/DTU-CS/HGK/best_model`.
+Open `http://127.0.0.1:7860` in your browser. The Hugging Face Inference API must be available for the selected model; usage may depend on your Hugging Face account and plan.
 
 For a command-line prediction:
 
