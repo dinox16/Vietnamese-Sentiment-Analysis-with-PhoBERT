@@ -11,8 +11,8 @@ pinned: false
 
 This project uses **PhoBERT-base**, fine-tuned on the **UIT-VSFC (Vietnamese Students' Feedback Corpus)**, to classify student comments as **negative, neutral, or positive**. Enter a comment in Vietnamese to see the model's predicted sentiment and confidence scores.
 
-- **Live demo:** `https://huggingface.co/spaces/YOUR_HF_USERNAME/phobert-uit-vsfc-demo` (replace `YOUR_HF_USERNAME`)
-- **Fine-tuned model:** `https://huggingface.co/YOUR_HF_USERNAME/phobert-uit-vsfc` (replace `YOUR_HF_USERNAME`)
+- **Live demo:** `https://vietnamese-sentiment-analysis-with-one.vercel.app/
+- **Fine-tuned model:** `https://huggingface.co/Dinox16/phobert-sentiment
 - **Training notebook:** [notebooks/phobert_uit_vsfc_train.ipynb](notebooks/phobert_uit_vsfc_train.ipynb)
 
 ## Test results

@@ -223,7 +223,6 @@ with gr.Blocks(
         outputs=scores,
     )
 
-
 app = FastAPI()
 
 app = gr.mount_gradio_app(
@@ -233,7 +232,5 @@ app = gr.mount_gradio_app(
     theme=theme,
 )
 
-
-# Local development only.
 if __name__ == "__main__":
     demo.launch(theme=theme)
