@@ -47,6 +47,7 @@ token*
 .huggingface/
 .cache/
 __huggingface_repos__.json
+hf_space/.cache/
 
 # Gradio
 .gradio/

@@ -11,8 +11,9 @@ pinned: false
 
 This project uses **PhoBERT-base**, fine-tuned on the **UIT-VSFC (Vietnamese Students' Feedback Corpus)**, to classify student comments as **negative, neutral, or positive**. Enter a comment in Vietnamese to see the model's predicted sentiment and confidence scores.
 
-- **Live demo:** `https://vietnamese-sentiment-analysis-with-one.vercel.app/
-- **Fine-tuned model:** `https://huggingface.co/Dinox16/phobert-sentiment
+- **Live demo:** [Vercel website](https://vietnamese-sentiment-analysis-with-one.vercel.app/)
+- **Inference API Space:** `https://huggingface.co/spaces/Dinox16/phobert-sentiment-api` (create this Space from the `hf_space/` directory)
+- **Fine-tuned model:** [Dinox16/phobert-sentiment](https://huggingface.co/Dinox16/phobert-sentiment)
 - **Training notebook:** [notebooks/phobert_uit_vsfc_train.ipynb](notebooks/phobert_uit_vsfc_train.ipynb)
 
 ## Test results
@@ -35,6 +36,7 @@ The saved training configuration is in [`result/DTU-CS/HGK/results/config.json`]
 
 ```text
 app.py                         Gradio web demo
+hf_space/                      FastAPI inference service for a Docker Space
 vsfc/preprocessing.py          Text normalization and word segmentation
 vsfc/predictor.py              Tokenization, model loading, and prediction
 scripts/predict.py             Command-line prediction
@@ -55,19 +57,31 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-The app calls the model through the Hugging Face Inference API. Copy `.env.example` to `.env`, then add your Hugging Face access token and model ID:
+The Gradio demo calls the standalone Hugging Face Space endpoint. Copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and replace `HF_TOKEN` with your Hugging Face token. Set `HF_MODEL_ID` to the repository containing your fine-tuned text-classification model. Keep `.env` private; it is excluded from Git. Install the dependencies with `pip install -r requirements.txt`, then start the app:
+Edit `.env` and set `SENTIMENT_API_URL` to your Space's `/predict` URL. If the Space requires authentication, set `SENTIMENT_API_TOKEN` too. Keep `.env` private; it is excluded from Git. Install the dependencies with `pip install -r requirements.txt`, then start the app:
 
 ```bash
 python app.py
 ```
 
-Open `http://127.0.0.1:7860` in your browser. The Hugging Face Inference API must be available for the selected model; usage may depend on your Hugging Face account and plan.
+Open `http://127.0.0.1:7860` in your browser. The Space itself loads the model; the website does not need a Hugging Face model token when the Space endpoint is public.
+
+## Deploy the standalone inference API
+
+Create a Docker Space named `phobert-sentiment-api` under the `Dinox16` account. In that Space repository, put `hf_space/app.py` at the repository root as `app.py`, `hf_space/requirements.txt` as `requirements.txt`, `hf_space/README.md` as `README.md`, and `hf_space/Dockerfile` as `Dockerfile`; also copy the top-level `vsfc/` package to the Space repository root. The Dockerfile expects those files at its build root.
+
+The service loads `Dinox16/phobert-sentiment` and exposes `POST /predict`:
+
+```json
+{"text": "Thầy giảng bài rất dễ hiểu."}
+```
+
+It returns `text`, `prediction`, and `scores`. The health endpoint is `GET /`. Add `HF_TOKEN` as a Space secret only if the model repository is private or gated. Set the Vercel server environment variable `SENTIMENT_API_URL` to `https://dinox16-phobert-sentiment-api.hf.space/predict`; if you protect the Space API, store its access token in a Vercel server environment variable and send it from the server, never from browser code.
 
 For a command-line prediction:
 

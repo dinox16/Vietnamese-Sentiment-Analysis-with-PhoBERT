@@ -10,40 +10,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-HF_MODEL_ID = os.getenv(
-    "HF_MODEL_ID", "Dinox16/phobert-sentiment"
+SENTIMENT_API_URL = os.getenv(
+    "SENTIMENT_API_URL",
+    "https://dinox16-phobert-sentiment-api.hf.space/predict",
 ).strip()
-
-HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
-
-HF_API_URL = os.getenv(
-    "HF_API_URL",
-    f"https://router.huggingface.co/hf-inference/models/{HF_MODEL_ID}"
-).strip()
-
-LABEL_EN = {
-    "negative": "Negative",
-    "neutral": "Neutral",
-    "positive": "Positive",
-}
+SENTIMENT_API_TOKEN = os.getenv("SENTIMENT_API_TOKEN", "").strip()
 
 
 def classify(text: str) -> dict:
     if not text or not text.strip():
         return {}
 
-    if not HF_TOKEN:
-        raise gr.Error(
-            "HF_TOKEN is missing. Configure it in Vercel Environment Variables."
-        )
-
     try:
+        headers = {"Content-Type": "application/json"}
+        if SENTIMENT_API_TOKEN:
+            headers["Authorization"] = f"Bearer {SENTIMENT_API_TOKEN}"
         response = requests.post(
-            HF_API_URL,
-            headers={
-                "Authorization": f"Bearer {HF_TOKEN}"
-            },
-            json={"inputs": text.strip()},
+            SENTIMENT_API_URL,
+            headers=headers,
+            json={"text": text.strip()},
             timeout=30,
         )
 
@@ -72,7 +57,7 @@ def classify(text: str) -> dict:
             pass
 
         if status in (401, 403):
-            message = "Invalid HF_TOKEN or insufficient permissions."
+            message = "The sentiment API rejected the request. Check the Space access token."
         elif status == 404:
             message = "Model inference endpoint not found."
         elif status == 429:
@@ -80,7 +65,7 @@ def classify(text: str) -> dict:
         elif status == 503:
             message = "Inference service temporarily unavailable."
         else:
-            message = f"Hugging Face API error: {status}"
+            message = f"Sentiment API error: {status}"
 
         if detail:
             message += f" {detail}"
@@ -89,51 +74,21 @@ def classify(text: str) -> dict:
 
     except requests.RequestException as exc:
         raise gr.Error(
-            "Failed to connect to Hugging Face."
+            "Failed to connect to the sentiment API."
         ) from exc
 
     except ValueError as exc:
         raise gr.Error(
-            "Hugging Face returned invalid JSON."
+            "The sentiment API returned invalid JSON."
         ) from exc
 
-    # Accept either flat or nested classification output.
-    if isinstance(payload, list) and payload:
-        predictions = (
-            payload[0]
-            if isinstance(payload[0], list)
-            else payload
-        )
-    else:
-        predictions = payload
-
-    if not isinstance(predictions, list):
+    scores = payload.get("scores") if isinstance(payload, dict) else None
+    if not isinstance(scores, dict) or not scores:
         raise gr.Error(
-            "Unexpected response format. Check model inference support."
+            "The sentiment API returned no class scores."
         )
 
-    scores = {}
-
-    for item in predictions:
-        if not isinstance(item, dict):
-            continue
-
-        if "label" not in item or "score" not in item:
-            continue
-
-        label = str(item["label"])
-        display_label = LABEL_EN.get(
-            label.lower(), label
-        )
-
-        scores[display_label] = float(item["score"])
-
-    if not scores:
-        raise gr.Error(
-            "No sentiment predictions were returned."
-        )
-
-    return scores
+    return {str(label): float(score) for label, score in scores.items()}
 
 
 theme = gr.themes.Soft(
