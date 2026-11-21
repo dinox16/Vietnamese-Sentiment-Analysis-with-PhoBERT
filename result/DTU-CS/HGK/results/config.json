@@ -1,0 +1,21 @@
+{
+  "seed": 42,
+  "dataset_name": "uitnlp/vietnamese_students_feedback",
+  "dataset_revision": "refs/convert/parquet",
+  "text_col": "sentence",
+  "label_col": "sentiment",
+  "model_name_or_path": null,
+  "hub_model_name": "vinai/phobert-base",
+  "max_length": 128,
+  "epochs": 5,
+  "train_batch_size": 16,
+  "eval_batch_size": 32,
+  "learning_rate": 2e-05,
+  "weight_decay": 0.01,
+  "warmup_ratio": 0.1,
+  "max_grad_norm": 1.0,
+  "early_stopping_patience": 2,
+  "use_class_weights": false,
+  "use_multi_gpu": true,
+  "output_dir": "/kaggle/working/result/DTU-CS/HGK"
+}

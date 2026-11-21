@@ -1,0 +1,7 @@
+{
+  "model": "PhoBERT-base",
+  "best_epoch": 5,
+  "val_macro_f1": 0.8700698885250585,
+  "test_accuracy": 0.9418825015792799,
+  "test_macro_f1": 0.8379512277121669
+}
