@@ -12,13 +12,13 @@ pinned: false
 This project uses **PhoBERT-base**, fine-tuned on the **UIT-VSFC (Vietnamese Students' Feedback Corpus)**, to classify student comments as **negative, neutral, or positive**. Enter a comment in Vietnamese to see the model's predicted sentiment and confidence scores.
 
 - **Live demo:** [Vercel website](https://vietnamese-sentiment-analysis-with-one.vercel.app/)
-- **Inference API Space:** `https://huggingface.co/spaces/Dinox16/phobert-sentiment-api` (create this Space from the `hf_space/` directory)
+- **Inference API Space:** `https://huggingface.co/spaces/Dinox16/pho-bert-DTU
 - **Fine-tuned model:** [Dinox16/phobert-sentiment](https://huggingface.co/Dinox16/phobert-sentiment)
-- **Training notebook:** [notebooks/phobert_uit_vsfc_train.ipynb](notebooks/phobert_uit_vsfc_train.ipynb)
+- **Training notebook:** [notebooks/phobert_uit_vsfc_train.ipynb](notebooks\dtu-sda-da-cs467a-hogiakhanh-havanquoctien (1).ipynb)
 
 ## Test results
 
-The best checkpoint was selected using validation Macro-F1. The figures below are from the held-out test set, as recorded in `result/DTU-CS/HGK/results/test_metrics.json`.
+The best checkpoint was selected using validation Macro-F1. The figures below are from the held-out test set, as recorded in `result/DTU-CS/HGK/results/test_metrics.json`
 
 | Model | Test accuracy | Test Macro-F1 |
 |---|---:|---:|
