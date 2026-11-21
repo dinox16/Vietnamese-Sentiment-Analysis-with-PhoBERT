@@ -147,7 +147,7 @@ theme = gr.themes.Soft(
     button_primary_background_fill_hover="#6d28d9",
 )
 
-with gr.Blocks(theme=theme, title="Student Feedback Sentiment") as demo:
+with gr.Blocks(title="Student Feedback Sentiment") as demo:
     gr.Markdown(
         """
         # Student Feedback Sentiment
@@ -164,15 +164,15 @@ with gr.Blocks(theme=theme, title="Student Feedback Sentiment") as demo:
                 max_lines=10,
             )
             submit = gr.Button("Analyze sentiment", variant="primary")
-            gr.Examples(
-                examples=[
-                    ["Giảng viên giảng bài rất dễ hiểu."],
-                    ["Môn học quá nhàm chán và khó hiểu."],
-                    ["Thầy giảng bình thường, không có gì đặc biệt."],
-                    ["Thầy dạy hay nhưng không đủ thời gian giải đáp thắc mắc."],
-                ],
-                inputs=comment,
-                label="Try an example",
+            gr.Markdown(
+                """
+                **Example comments**
+
+                - Giảng viên giảng bài rất dễ hiểu.
+                - Môn học quá nhàm chán và khó hiểu.
+                - Thầy giảng bình thường, không có gì đặc biệt.
+                - Thầy dạy hay nhưng không đủ thời gian giải đáp thắc mắc.
+                """
             )
         with gr.Column(scale=5):
             scores = gr.Label(num_top_classes=3, label="Sentiment scores")
@@ -189,7 +189,7 @@ with gr.Blocks(theme=theme, title="Student Feedback Sentiment") as demo:
     comment.submit(fn=classify, inputs=comment, outputs=scores)
 
 
-app = gr.mount_gradio_app(api, demo, path="/")
+app = gr.mount_gradio_app(api, demo, path="/", theme=theme)
 
 
 if __name__ == "__main__":
